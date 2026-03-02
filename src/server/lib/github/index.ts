@@ -16,6 +16,7 @@
 
 import yaml from 'js-yaml';
 import crypto from 'crypto';
+import path from 'path';
 import { NextApiRequest } from 'next';
 import { GITHUB_WEBHOOK_SECRET } from 'shared/config';
 import { LifecycleError } from 'server/lib/errors';
@@ -201,6 +202,72 @@ export async function getSHAForBranch(branchName: string, owner: string, name: s
       branch: branchName,
     }).warn('GitHub: SHA fetch failed');
     throw new Error(error?.message || 'Unable to retrieve SHA from branch');
+  }
+}
+
+function normalizeChangedPath(pathValue: unknown): string | null {
+  if (typeof pathValue !== 'string') return null;
+
+  let normalizedPath = path.posix.normalize(pathValue.replace(/\\/g, '/').trim());
+  normalizedPath = normalizedPath.replace(/^\/+/, '');
+
+  while (normalizedPath.startsWith('./')) {
+    normalizedPath = normalizedPath.slice(2);
+  }
+
+  if (!normalizedPath || normalizedPath === '.' || normalizedPath.startsWith('../')) {
+    return null;
+  }
+
+  return normalizedPath;
+}
+
+export async function getChangedFilePathsFromCompare({
+  installationId,
+  fullName,
+  before,
+  after,
+}: {
+  installationId?: number;
+  fullName: string;
+  before: string;
+  after: string;
+}): Promise<string[] | null> {
+  try {
+    if (!fullName || !before || !after) return null;
+
+    const client = await createOctokitClient({
+      installationId,
+      caller: 'getChangedFilePathsFromCompare',
+    });
+    const response = await client.request(`GET /repos/${fullName}/compare/${before}...${after}`);
+    const files = response?.data?.files;
+
+    if (!Array.isArray(files)) return null;
+
+    const changedPaths = new Set<string>();
+
+    files.forEach(({ status, filename, previous_filename }) => {
+      const normalizedFilePath = normalizeChangedPath(filename);
+      if (normalizedFilePath) changedPaths.add(normalizedFilePath);
+
+      if (status === 'renamed') {
+        const normalizedPreviousPath = normalizeChangedPath(previous_filename);
+        if (normalizedPreviousPath) changedPaths.add(normalizedPreviousPath);
+      }
+    });
+
+    if (files.length > 0 && changedPaths.size === 0) return null;
+
+    return Array.from(changedPaths);
+  } catch (error) {
+    getLogger({
+      error,
+      repo: fullName,
+      before,
+      after,
+    }).warn('GitHub: compare changed paths fetch failed');
+    return null;
   }
 }
 

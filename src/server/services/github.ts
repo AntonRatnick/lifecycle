@@ -270,6 +270,19 @@ export default class GithubService extends Service {
         if (pullRequest) {
           await pullRequest.$query().patch({ latestCommit });
         }
+
+        void github
+          .getChangedFilePathsFromCompare({
+            fullName: repoName,
+            before: previousCommit,
+            after: latestCommit,
+          })
+          .then((changedPaths) => {
+            if (!changedPaths) return;
+            getLogger({}).debug(
+              `Push: compare changedPaths=${changedPaths.length} repo=${repoName} branch=${branchName}`
+            );
+          });
       }
 
       const allDeploys = await models.Deploy.query()

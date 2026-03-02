@@ -18,6 +18,7 @@ import mockRedisClient from 'server/lib/__mocks__/redisClientMock';
 import Github from '../github';
 import { DeployStatus, PullRequestStatus } from 'shared/constants';
 import { PushEvent } from '@octokit/webhooks-types';
+import * as githubLib from 'server/lib/github';
 
 mockRedisClient();
 
@@ -98,6 +99,7 @@ describe('Github Service - handlePushWebhook', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(githubLib, 'getChangedFilePathsFromCompare').mockResolvedValue(null);
 
     mockDb = {
       models: {

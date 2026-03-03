@@ -11,9 +11,17 @@ _.path = ["./node_modules/.bin"]
 
 [tasks.dev]
 description = "Set up kind cluster and run tilt"
+usage = '''
+flag "--provider <provider>" help="provider for Kind" default="docker" choices "docker" "podman"
+'''
 run = """
 #!/usr/bin/env bash
 set -e
+
+{% if usage.provider == "podman" %}
+export KIND_EXPERIMENTAL_PROVIDER=podman
+export DOCKER_BUILDKIT=0
+{% endif %}
 
 CLUSTER_NAME="lfc"
 REGISTRY_CONFIG_DIR="/tmp/kind-registry-config/10.96.188.230:5000"
